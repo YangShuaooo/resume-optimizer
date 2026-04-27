@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 
 export default function UploadPage() {
@@ -11,6 +11,7 @@ export default function UploadPage() {
   const [jobDescription, setJobDescription] = useState('')
   const [loading, setLoading] = useState(false)
   const [activeMode, setActiveMode] = useState<'text' | 'file'>('file')
+  const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleOptimize = async () => {
@@ -76,21 +77,53 @@ export default function UploadPage() {
     }
   }
 
+  const validateAndSetFile = useCallback((file: File) => {
+    const lowerName = file.name.toLowerCase()
+    const isPDF = lowerName.endsWith('.pdf') || file.type === 'application/pdf'
+    const isDOCX = lowerName.endsWith('.docx') || file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    
+    if (!isPDF && !isDOCX) {
+      alert('仅支持 PDF 和 DOCX 格式')
+      return
+    }
+    
+    if (file.size > 10 * 1024 * 1024) {
+      alert('文件大小不能超过 10MB')
+      return
+    }
+    
+    setSelectedFile(file)
+  }, [])
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] || null
     if (file) {
-      const allowedTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
-      if (!allowedTypes.includes(file.type) && !file.name.toLowerCase().endsWith('.pdf') && !file.name.toLowerCase().endsWith('.docx')) {
-        alert('仅支持 PDF 和 DOCX 格式')
-        return
-      }
-      if (file.size > 10 * 1024 * 1024) {
-        alert('文件大小不能超过 10MB')
-        return
-      }
-      setSelectedFile(file)
+      validateAndSetFile(file)
     }
   }
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(true)
+  }, [])
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+  }, [])
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+
+    const files = Array.from(e.dataTransfer.files)
+    if (files.length > 0) {
+      validateAndSetFile(files[0])
+    }
+  }, [validateAndSetFile])
 
   return (
     <div className="min-h-screen bg-gray-50 py-4 sm:py-8 px-3 sm:px-4">
@@ -171,8 +204,15 @@ export default function UploadPage() {
               />
             ) : (
               <div
-                className="w-full h-full border-2 border-dashed border-gray-300 rounded-lg p-6 sm:p-8 text-center cursor-pointer hover:border-blue-500 transition-colors bg-white flex flex-col justify-center overflow-hidden"
+                className={`w-full h-full border-2 border-dashed rounded-lg p-6 sm:p-8 text-center cursor-pointer transition-all duration-300 bg-white flex flex-col justify-center overflow-hidden ${
+                  isDragging 
+                    ? 'border-blue-500 bg-blue-50 scale-[1.02]' 
+                    : 'border-gray-300 hover:border-blue-500 hover:bg-blue-50/50'
+                }`}
                 onClick={() => fileInputRef.current?.click()}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
               >
                 <input
                   ref={fileInputRef}
@@ -200,8 +240,12 @@ export default function UploadPage() {
                   </div>
                 ) : (
                   <div>
-                    <div className="text-3xl sm:text-4xl mb-3 sm:mb-4">📄</div>
-                    <div className="text-gray-700 font-medium mb-2 text-sm sm:text-base">点击或拖拽文件到此处</div>
+                    <div className={`text-3xl sm:text-4xl mb-3 sm:mb-4 transition-transform duration-300 ${isDragging ? 'scale-125' : ''}`}>
+                      {isDragging ? '🎉' : '📄'}
+                    </div>
+                    <div className="text-gray-700 font-medium mb-2 text-sm sm:text-base">
+                      {isDragging ? '松开文件开始上传' : '点击或拖拽文件到此处'}
+                    </div>
                     <div className="text-xs sm:text-sm text-gray-500">支持 PDF、DOCX 格式，最大 10MB</div>
                   </div>
                 )}
